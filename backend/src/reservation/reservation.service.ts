@@ -5,7 +5,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
-import { Reservation, Role, Statut, ReservationStatus, MessageType, Prisma } from '@prisma/client';
+import { FindReservationsDto } from './dto/find-reservations.dto';
+import { Reservation, Role, Statut, ReservationStatus, MessageType, Prisma, ParkingSpot } from '@prisma/client';
 
 @Injectable()
 export class ReservationService {
@@ -144,6 +145,128 @@ export class ReservationService {
 
       return reservation;
     });
+  }
+
+  async findAll(filters?: FindReservationsDto): Promise<Reservation[]> {
+    const where: Prisma.ReservationWhereInput = {};
+
+    if (filters?.userId) {
+      where.userId = filters.userId;
+    }
+
+    if (filters?.parkingSpotId) {
+      where.parkingSpotId = filters.parkingSpotId;
+    }
+
+    if (filters?.statut) {
+      where.statut = filters.statut;
+    }
+
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.date = {};
+      if (filters.dateFrom) {
+        where.date.gte = new Date(filters.dateFrom);
+      }
+      if (filters.dateTo) {
+        where.date.lte = new Date(filters.dateTo);
+      }
+    }
+
+    return this.prisma.reservation.findMany({
+      where,
+      include: {
+        user: true,
+        parkingSpot: true,
+        checkIn: true,
+      },
+      orderBy: {
+        date: 'desc',
+      },
+    });
+  }
+
+  async findOne(id: string): Promise<Reservation> {
+    const reservation = await this.prisma.reservation.findUnique({
+      where: { id },
+      include: {
+        user: true,
+        parkingSpot: true,
+        checkIn: true,
+        histories: true,
+      },
+    });
+
+    if (!reservation) {
+      throw new NotFoundException(`Réservation avec l'ID ${id} non trouvée`);
+    }
+
+    return reservation;
+  }
+
+  async findByUser(userId: string, statut?: ReservationStatus): Promise<Reservation[]> {
+    const where: Prisma.ReservationWhereInput = { userId };
+
+    if (statut) {
+      where.statut = statut;
+    }
+
+    return this.prisma.reservation.findMany({
+      where,
+      include: {
+        parkingSpot: true,
+        checkIn: true,
+      },
+      orderBy: {
+        date: 'desc',
+      },
+    });
+  }
+
+  async getAvailability(
+    date: Date,
+    besoinChargeur?: boolean,
+  ): Promise<{ available: ParkingSpot[]; total: number; withCharger: number }> {
+    const startOfDay = this.startOfDay(date);
+    const endOfDay = this.endOfDay(date);
+
+    // Récupérer toutes les places avec leurs réservations pour cette date
+    const allSpots = await this.prisma.parkingSpot.findMany({
+      include: {
+        reservations: {
+          where: {
+            date: {
+              gte: startOfDay,
+              lt: endOfDay,
+            },
+            statut: {
+              in: [ReservationStatus.CONFIRMEE, ReservationStatus.EN_ATTENTE],
+            },
+          },
+        },
+      },
+    });
+
+    // Filtrer les places disponibles (sans réservation active)
+    let availableSpots = allSpots.filter((spot) => spot.reservations.length === 0);
+
+    // Si besoinChargeur est spécifié, filtrer en conséquence
+    if (besoinChargeur !== undefined) {
+      availableSpots = availableSpots.filter(
+        (spot) => spot.aChargeurElectrique === besoinChargeur,
+      );
+    }
+
+    // Calculer les statistiques
+    const withCharger = availableSpots.filter((spot) => spot.aChargeurElectrique).length;
+
+    // Retirer les réservations des objets retournés pour une réponse plus propre
+    const cleanSpots = availableSpots.map(({ reservations, ...spot }) => spot) as ParkingSpot[];
+
+    return {
+      available: cleanSpots,
+      total: cleanSpots.length,
+      withCharger,
+    };
   }
 
   private getMaxDaysAdvance(role: Role): number {
