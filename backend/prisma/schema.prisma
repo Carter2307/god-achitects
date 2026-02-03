@@ -58,8 +58,7 @@ model Reservation {
   id             String            @id @default(uuid())
   userId         String
   parkingSpotId  String
-  dateDebut      DateTime
-  dateFin        DateTime
+  date     DateTime 
   besoinChargeur Boolean           @default(false)
   statut         ReservationStatus @default(EN_ATTENTE)
   dateCreation   DateTime          @default(now())
