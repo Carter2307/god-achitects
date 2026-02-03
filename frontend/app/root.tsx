@@ -10,6 +10,7 @@ import { AlertCircle } from "lucide-react";
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { ToastProvider } from "~/contexts/toast-context";
 import { QueryProvider } from "~/providers/query-provider";
 import { Alert, AlertDescription, AlertTitle } from "~/ui/alert";
 import { Button } from "~/ui/button";
@@ -48,7 +49,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryProvider>
-      <Outlet />
+      <ToastProvider>
+        <Outlet />
+      </ToastProvider>
     </QueryProvider>
   );
 }
