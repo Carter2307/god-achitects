@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Get, Query, BadRequestException } from '@nestjs/common';
 import { ReservationService } from './reservation.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 
@@ -10,5 +10,13 @@ export class ReservationController {
   @HttpCode(HttpStatus.CREATED)
   create(@Body() createReservationDto: CreateReservationDto) {
     return this.reservationService.create(createReservationDto);
+  }
+
+  @Get()
+  async findByUser(@Query('userId') userId?: string) {
+    if (!userId) {
+      throw new BadRequestException('Parameter userId is required');
+    }
+    return this.reservationService.findByUser(userId);
   }
 }

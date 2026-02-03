@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router";
 import { AppShell } from "~/components/layouts";
 import { ParkingGrid } from "~/components/parking/parking-grid";
@@ -8,9 +8,13 @@ import {
   ReservationSummary,
 } from "~/components/reservation";
 import { useToastContext } from "~/contexts/toast-context";
+import { useParkingSpots, useCreateReservation, useCurrentUser, getErrorMessage } from "~/hooks";
 import { cn } from "~/lib/utils";
 import { Button } from "~/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/ui/card";
+
+// TODO: Get this from auth context once implemented
+const MOCK_USER_ID = "employe@parking.com"; // Will be replaced by actual user ID after seed
 
 const STEPS = [
   { number: 1, title: "Dates", description: "Choisir les jours" },
@@ -24,14 +28,39 @@ export default function NewReservation() {
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [needsCharger, setNeedsCharger] = useState(false);
-  const [selectedSpot, setSelectedSpot] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedSpotId, setSelectedSpotId] = useState<string | null>(null);
+
+  // Fetch current user (employee)
+  const { data: currentUser } = useCurrentUser(MOCK_USER_ID);
+
+  // Format date for API
+  const dateString = selectedDate ? selectedDate.toISOString().split("T")[0] : null;
+
+  // Fetch parking spots when date is selected
+  const { data: parkingSpots, isLoading: isSpotsLoading } = useParkingSpots(
+    dateString,
+    needsCharger
+  );
+
+  // Create reservation mutation
+  const createReservation = useCreateReservation();
+
+  // Reset selected spot when date or charger preference changes
+  useEffect(() => {
+    setSelectedSpotId(null);
+  }, [dateString, needsCharger]);
+
+  // Get selected spot details for display
+  const selectedSpot = parkingSpots?.find((s) => s.id === selectedSpotId);
+  const selectedSpotDisplay = selectedSpot
+    ? `${selectedSpot.row}${selectedSpot.number}`
+    : null;
 
   const mockUser = {
-    id: "1",
-    email: "jean.dupont@example.com",
-    firstName: "Jean",
-    lastName: "Dupont",
+    id: currentUser?.id || "1",
+    email: currentUser?.email || "jean.dupont@example.com",
+    firstName: currentUser?.prenom || "Jean",
+    lastName: currentUser?.nom || "Dupont",
     role: "employee" as const,
     status: "active" as const,
     createdAt: new Date().toISOString(),
@@ -43,9 +72,9 @@ export default function NewReservation() {
       case 1:
         return selectedDate !== null;
       case 2:
-        return selectedSpot !== null;
+        return selectedSpotId !== null;
       case 3:
-        return selectedDate !== null && selectedSpot !== null;
+        return selectedDate !== null && selectedSpotId !== null;
       default:
         return false;
     }
@@ -64,19 +93,30 @@ export default function NewReservation() {
   };
 
   const handleConfirm = async () => {
-    setIsSubmitting(true);
-    // TODO: Implement actual reservation creation
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (!selectedDate || !selectedSpotId || !currentUser?.id) {
+      toast.error("Erreur", "Informations manquantes pour la réservation.");
+      return;
+    }
 
-    // Show success toast
-    toast.success(
-      "Réservation confirmée!",
-      `Place ${selectedSpot} réservée pour le ${selectedDate?.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}.`
-    );
+    try {
+      await createReservation.mutateAsync({
+        userId: currentUser.id,
+        date: selectedDate.toISOString(),
+        parkingSpotId: selectedSpotId,
+        besoinChargeur: needsCharger,
+      });
 
-    // Navigate to reservations page
-    navigate("/employee/reservations");
+      // Show success toast
+      toast.success(
+        "Réservation confirmée!",
+        `Place ${selectedSpotDisplay} réservée pour le ${selectedDate.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}.`
+      );
+
+      // Navigate to reservations page
+      navigate("/employee/reservations");
+    } catch (error) {
+      toast.error("Erreur", getErrorMessage(error));
+    }
   };
 
   const handleEditStep = (step: number) => {
@@ -150,7 +190,7 @@ export default function NewReservation() {
                       onChange={(e) => {
                         setNeedsCharger(e.target.checked);
                         // Reset spot selection if charger preference changes
-                        setSelectedSpot(null);
+                        setSelectedSpotId(null);
                       }}
                       className="size-5 rounded border-border"
                     />
@@ -183,9 +223,11 @@ export default function NewReservation() {
               </CardHeader>
               <CardContent>
                 <ParkingGrid
-                  selectedSpot={selectedSpot}
-                  onSelectSpot={setSelectedSpot}
+                  selectedSpot={selectedSpotId}
+                  onSelectSpot={setSelectedSpotId}
                   needsCharger={needsCharger}
+                  spots={parkingSpots}
+                  isLoading={isSpotsLoading}
                 />
               </CardContent>
             </Card>
@@ -195,11 +237,11 @@ export default function NewReservation() {
           {currentStep === 3 && (
             <ReservationSummary
               selectedDate={selectedDate}
-              selectedSpot={selectedSpot}
+              selectedSpot={selectedSpotDisplay}
               needsCharger={needsCharger}
               onConfirm={handleConfirm}
               onEdit={handleEditStep}
-              isSubmitting={isSubmitting}
+              isSubmitting={createReservation.isPending}
             />
           )}
           {/* Navigation Buttons */}
@@ -223,9 +265,9 @@ export default function NewReservation() {
                     {selectedDate.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
                   </p>
                 )}
-                {currentStep === 2 && selectedSpot && (
+                {currentStep === 2 && selectedSpotDisplay && (
                   <p className="text-sm text-muted-foreground">
-                    Place {selectedSpot} sélectionnée
+                    Place {selectedSpotDisplay} sélectionnée
                   </p>
                 )}
                 <Button

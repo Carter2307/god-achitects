@@ -11,8 +11,8 @@ export interface Reservation {
   userId: string;
   parkingSpotId: string;
   date: string;
-  status: ReservationStatus;
-  needsCharger: boolean;
+  statut: ReservationStatus;
+  besoinChargeur: boolean;
   checkInDeadline: string;
   createdAt: string;
   updatedAt: string;
@@ -34,10 +34,10 @@ export interface ReservationWithDetails extends Reservation {
 }
 
 export interface CreateReservationInput {
+  userId: string;
+  date: string;
   parkingSpotId: string;
-  startDate: string;
-  endDate: string;
-  needsCharger: boolean;
+  besoinChargeur: boolean;
 }
 
 export interface UpdateReservationInput {

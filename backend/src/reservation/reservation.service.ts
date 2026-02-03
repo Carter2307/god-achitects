@@ -146,6 +146,25 @@ export class ReservationService {
     });
   }
 
+  async findByUser(userId: string): Promise<(Reservation & { user: any; parkingSpot: any })[]> {
+    if (!userId) {
+      throw new BadRequestException('userId is required');
+    }
+
+    const reservations = await this.prisma.reservation.findMany({
+      where: { userId },
+      include: {
+        user: true,
+        parkingSpot: true,
+      },
+      orderBy: {
+        date: 'desc',
+      },
+    });
+
+    return reservations;
+  }
+
   private getMaxDaysAdvance(role: Role): number {
     switch (role) {
       case Role.GESTIONNAIRE:

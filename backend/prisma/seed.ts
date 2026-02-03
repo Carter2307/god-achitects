@@ -32,6 +32,22 @@ async function main() {
     },
   });
 
+  // Création d'un employé pour les tests
+  const employe = await prisma.user.upsert({
+    where: { email: 'employe@parking.com' },
+    update: {},
+    create: {
+      nom: 'Dupont',
+      prenom: 'Jean',
+      email: 'employe@parking.com',
+      motDePasse: 'password123',
+      role: Role.EMPLOYE,
+      statut: Statut.ACTIF,
+    },
+  });
+
+  console.log(`✅ Employé créé avec l'ID: ${employe.id}`);
+
   // 2. Création des 60 places de Parking
   const rows = ['A', 'B', 'C', 'D', 'E', 'F'];
   // Correction ici : On définit explicitement le type pour éviter l'erreur "never"
