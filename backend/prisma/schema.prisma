@@ -1,0 +1,135 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  EMPLOYEE
+  SECRETARY
+  MANAGER
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum EmailMessageType {
+  RESERVATION_CONFIRMATION
+  RESERVATION_REMINDER
+  RESERVATION_CANCELLED
+  RESERVATION_EXPIRED
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          Role           @default(EMPLOYEE)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  reservations  Reservation[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model ParkingSpot {
+  id                 String        @id @default(uuid())
+  spotNumber         String        @unique
+  row                String
+  hasElectricCharger Boolean       @default(false)
+  isAvailable        Boolean       @default(true)
+  qrCode             String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  reservations       Reservation[]
+
+  @@map("parking_spots")
+}
+
+model Reservation {
+  id            String            @id @default(uuid())
+  userId        String
+  parkingSpotId String
+  startDate     DateTime
+  endDate       DateTime
+  status        ReservationStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parkingSpot ParkingSpot @relation(fields: [parkingSpotId], references: [id], onDelete: Cascade)
+  checkIn     CheckIn?
+  emailQueue  EmailQueue[]
+  history     ReservationHistory?
+
+  @@map("reservations")
+}
+
+model CheckIn {
+  id            String      @id @default(uuid())
+  reservationId String      @unique
+  checkInTime   DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@map("check_ins")
+}
+
+model ReservationHistory {
+  id            String            @id @default(uuid())
+  reservationId String            @unique
+  userId        String
+  parkingSpotId String
+  startDate     DateTime
+  endDate       DateTime
+  status        ReservationStatus
+  checkInTime   DateTime?
+  createdAt     DateTime          @default(now())
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@map("reservation_history")
+}
+
+model EmailQueue {
+  id             String           @id @default(uuid())
+  reservationId  String
+  recipientEmail String
+  messageType    EmailMessageType
+  status         EmailStatus      @default(PENDING)
+  createdAt      DateTime         @default(now())
+  sentAt         DateTime?
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@map("email_queue")
+}
